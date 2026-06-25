@@ -1,0 +1,374 @@
+/* Log Manager Module Stylesheets */
+/* Fully light/dark compatible */
+
+.logmanager-wrapper {
+    padding: 15px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+}
+
+.logmanager-header {
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+    padding-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.logmanager-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--color-font-main, #333);
+}
+
+.logmanager-tabs {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    gap: 5px;
+}
+
+.logmanager-tabs li a {
+    display: block;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 4px;
+    color: var(--color-font-main, #333);
+    font-weight: 500;
+    transition: background-color 0.2s, color 0.2s;
+    background-color: rgba(128, 128, 128, 0.08);
+}
+
+.logmanager-tabs li a:hover,
+.logmanager-tabs li a.active {
+    background-color: var(--color-btn-bg, #0275d8);
+    color: #fff !important;
+}
+
+/* Grid Layout */
+.logmanager-grid {
+    display: grid;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.logmanager-cards {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.logmanager-two-columns {
+    grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 900px) {
+    .logmanager-two-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Card Styles */
+.card {
+    background: var(--color-bg-sidebar, #fff);
+    border: 1px solid rgba(128, 128, 128, 0.15);
+    border-radius: 6px;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.card h3 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-font-alt, #777);
+    margin: 0 0 5px 0;
+}
+
+.card .value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--color-font-main, #333);
+}
+
+.card-icon {
+    font-size: 24px;
+    opacity: 0.6;
+}
+
+/* Severity Backgrounds (Gradients & Accents) */
+.bg-total { border-left: 4px solid #00a3ff; }
+.bg-critical { border-left: 4px solid #ff4f2f; }
+.bg-warning { border-left: 4px solid #ffb300; }
+.bg-info { border-left: 4px solid #2baf2b; }
+.bg-devices { border-left: 4px solid #9c27b0; }
+.bg-rate { border-left: 4px solid #009688; }
+
+/* Panels / Widgets */
+.widget-panel {
+    background: var(--color-bg-sidebar, #fff);
+    border: 1px solid rgba(128, 128, 128, 0.15);
+    border-radius: 6px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 15px;
+}
+
+.widget-header {
+    border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.widget-header h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--color-font-main, #333);
+}
+
+.flex-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Tables */
+.list-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.list-table th,
+.list-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+}
+
+.list-table th {
+    font-weight: 600;
+    color: var(--color-font-alt, #555);
+}
+
+.no-data {
+    color: #999;
+    font-style: italic;
+    padding: 20px;
+}
+
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+
+/* Status Indicators */
+.status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.status-indicator.online { background-color: #2baf2b; }
+.status-indicator.offline { background-color: #ff4f2f; }
+
+/* Tags */
+.tag {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 3px;
+    color: #fff;
+}
+
+.sev-emergency { background-color: #d13b3b; }
+.sev-alert     { background-color: #e94b4b; }
+.sev-critical  { background-color: #f24f2f; }
+.sev-error     { background-color: #ff7800; }
+.sev-warning   { background-color: #ffb300; color: #222; }
+.sev-notice    { background-color: #2baf2b; }
+.sev-info      { background-color: #00a3ff; }
+.sev-debug     { background-color: #9e9e9e; }
+
+.vendor-tag { background-color: #607d8b; }
+.vendor-cisco { background-color: #005A9C; }
+.vendor-fortigate { background-color: #CC0000; }
+.vendor-mikrotik { background-color: #388E3C; }
+.vendor-juniper { background-color: #673AB7; }
+
+/* Forms */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+}
+
+.form-group label {
+    font-weight: 500;
+    margin-bottom: 5px;
+    color: var(--color-font-main, #333);
+}
+
+.form-group input,
+.form-group select {
+    padding: 8px;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    border-radius: 4px;
+    background-color: var(--color-bg-input, #fff);
+    color: var(--color-font-main, #333);
+}
+
+.form-help {
+    color: #888;
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+.inline-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.inline-group label {
+    margin-bottom: 0;
+}
+
+.form-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-primary {
+    background-color: var(--color-btn-bg, #0275d8);
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-alt {
+    background-color: rgba(128, 128, 128, 0.1);
+    color: var(--color-font-main, #333);
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.btn-primary:hover { opacity: 0.9; }
+.btn-alt:hover { background-color: rgba(128, 128, 128, 0.2); }
+
+.btn-action-small {
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+/* Error/Success Boxes */
+.error-msg-box {
+    background-color: rgba(255, 79, 47, 0.1);
+    border-left: 4px solid #ff4f2f;
+    color: #ff4f2f;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+}
+
+.success-msg-box {
+    background-color: rgba(43, 175, 43, 0.1);
+    border-left: 4px solid #2baf2b;
+    color: #2baf2b;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+}
+
+/* Scrollable Container for Live View */
+.scrollable-table-container {
+    max-height: 550px;
+    overflow-y: auto;
+}
+
+.log-table {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 13px;
+}
+
+.log-table tr:hover {
+    background-color: rgba(128,128,128,0.05);
+}
+
+.log-message-cell {
+    word-break: break-all;
+}
+
+/* Settings & Receiver details */
+.receiver-table th {
+    width: 30%;
+    font-weight: 600;
+    color: var(--color-font-alt, #555);
+}
+
+.receiver-table td {
+    font-family: monospace;
+}
+
+.note-box {
+    background: rgba(128, 128, 128, 0.05);
+    border: 1px dashed rgba(128, 128, 128, 0.3);
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+/* Pagination container */
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    padding: 15px;
+    border-top: 1px solid rgba(128, 128, 128, 0.1);
+}
+
+.pagination a.active {
+    background-color: var(--color-btn-bg, #0275d8);
+    color: #fff !important;
+}
+
+/* Alert styles */
+.alert-rule-form {
+    background: rgba(128,128,128,0.03);
+    border: 1px solid rgba(128,128,128,0.15);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+}
+
+.alert-log-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.alert-log-host {
+    font-weight: bold;
+    color: #888;
+    font-size: 11px;
+}
+
+.alert-log-message {
+    word-break: break-all;
+}
