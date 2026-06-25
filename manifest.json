@@ -1,49 +1,16 @@
 {
-    "manifest_version": 2.0,
-    "id": "zabbix-log-manager",
-    "name": "Log Manager",
-    "version": "1.0",
-    "namespace": "Modules\\LogManager",
-    "author": "Antigravity",
-    "description": "Centralized syslog management solution for Zabbix NOC & MSP environments.",
-    "url": "",
-    "widget": [],
-    "actions": {
-        "logmanager.overview": {
-            "class": "ActionOverview",
-            "layout": "layout.htmlpage",
-            "view": "overview"
-        },
-        "logmanager.livelogs": {
-            "class": "ActionLiveLogs",
-            "layout": "layout.htmlpage",
-            "view": "livelogs"
-        },
-        "logmanager.search": {
-            "class": "ActionSearch",
-            "layout": "layout.htmlpage",
-            "view": "search"
-        },
-        "logmanager.devices": {
-            "class": "ActionDevices",
-            "layout": "layout.htmlpage",
-            "view": "devices"
-        },
-        "logmanager.alerts": {
-            "class": "ActionAlerts",
-            "layout": "layout.htmlpage",
-            "view": "alerts"
-        },
-        "logmanager.statistics": {
-            "class": "ActionStatistics",
-            "layout": "layout.htmlpage",
-            "view": "statistics"
-        },
-        "logmanager.settings": {
-            "class": "ActionSettings",
-            "layout": "layout.htmlpage",
-            "view": "settings"
-        }
-    },
-    "config": {}
+	"manifest_version": 2.0,
+	"id": "logmanager",
+	"name": "Log Manager",
+	"version": "1.0.0",
+	"namespace": "LogManager",
+	"author": "Identiqa NMS",
+	"description": "Enterprise Syslog Management Solution — Live Logs, Search, Alerts, Statistics, Retention.",
+	"actions": {
+		"logmanager.view": {
+			"class": "CControllerLogManager",
+			"view": "logmanager.view",
+			"layout": "layout.htmlpage"
+		}
+	}
 }
