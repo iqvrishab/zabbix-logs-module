@@ -26,6 +26,8 @@ class CControllerLogManager extends CController {
 			'regex_pattern'  => 'string',
 			'severity'       => 'string',
 			'facility'       => 'string',
+			'hostname'       => 'string',
+			'source_ip'      => 'string',
 			'keyword'        => 'string',
 			'time_from'      => 'string',
 			'time_to'        => 'string',
@@ -33,6 +35,7 @@ class CControllerLogManager extends CController {
 			'ajax'           => 'in 1',
 			'page'           => 'int32',
 			'retention_days' => 'int32',
+			'enabled'        => 'string',
 		]);
 	}
 
@@ -41,13 +44,25 @@ class CControllerLogManager extends CController {
 	}
 
 	protected function doAction(): void {
-		$tab  = (string)$this->getInput('tab', 'overview');
-		$task = (string)$this->getInput('task', '');
+		$tab  = (string) $this->getInput('tab', 'overview');
+		$task = (string) $this->getInput('task', '');
 
+		// Handle AJAX live logs request
+		if ($this->hasInput('ajax')) {
+			$filters = [];
+			if ($this->hasInput('source_id')) {
+				$filters['source_id'] = (int) $this->getInput('source_id');
+			}
+			$logs = $this->repo->getLogs($filters, 50, 0);
+			header('Content-Type: application/json');
+			echo json_encode(['success' => true, 'logs' => $logs]);
+			exit;
+		}
+
+		// Handle tasks with redirect
 		if ($task !== '') {
 			try {
-				$redirect = $this->handleTask($task, $tab);
-				if ($redirect) {
+				if ($this->handleTask($task, $tab)) {
 					$this->redirect($tab);
 					return;
 				}
@@ -56,84 +71,52 @@ class CControllerLogManager extends CController {
 			}
 		}
 
-		// Handle AJAX request for Live Logs
-		if ($this->hasInput('ajax')) {
-			$filters = [];
-			if ($this->hasInput('source_id')) {
-				$filters['source_id'] = $this->getInput('source_id');
-			}
-			$logs = $this->repo->getLogs($filters, 50, 0);
-			header('Content-Type: application/json');
-			echo json_encode(['success' => true, 'logs' => $logs]);
-			exit;
+		// Handle export requests
+		if ($this->hasInput('export')) {
+			$this->handleExport();
+			return;
 		}
 
-		// Gather search filters
+		// Search filters
 		$filters = [
-			'hostname'  => $this->getInput('hostname', ''),
-			'source_ip' => $this->getInput('source_ip', ''),
-			'severity'  => $this->getInput('severity', ''),
-			'facility'  => $this->getInput('facility', ''),
-			'keyword'   => $this->getInput('keyword', ''),
-			'time_from' => $this->getInput('time_from', ''),
-			'time_to'   => $this->getInput('time_to', '')
+			'hostname'  => (string) $this->getInput('hostname',  ''),
+			'source_ip' => (string) $this->getInput('source_ip', ''),
+			'severity'  => (string) $this->getInput('severity',  ''),
+			'facility'  => (string) $this->getInput('facility',  ''),
+			'keyword'   => (string) $this->getInput('keyword',   ''),
+			'time_from' => (string) $this->getInput('time_from', ''),
+			'time_to'   => (string) $this->getInput('time_to',   ''),
 		];
 
-		// Handle search exports
-		if ($this->hasInput('export')) {
-			$logs = $this->repo->getLogs($filters, 5000, 0);
-			if ($this->getInput('export') === 'csv') {
-				header('Content-Type: text/csv');
-				header('Content-Disposition: attachment; filename="network_logs_' . date('Ymd_His') . '.csv"');
-				$output = fopen('php://output', 'w');
-				fputcsv($output, ['Log ID', 'Time', 'Severity', 'Facility', 'Hostname', 'IP', 'Message']);
-				foreach ($logs as $log) {
-					fputcsv($output, [
-						$log['log_id'],
-						$log['received_at'],
-						$log['severity'],
-						$log['facility'],
-						$log['hostname'],
-						$log['source_ip'],
-						$log['message']
-					]);
-				}
-				fclose($output);
-				exit;
-			} else {
-				header('Content-Type: application/json');
-				header('Content-Disposition: attachment; filename="network_logs_' . date('Ymd_His') . '.json"');
-				echo json_encode($logs, JSON_PRETTY_PRINT);
-				exit;
-			}
-		}
-
-		// Prepare view data
-		$page = max(1, $this->getInput('page', 1));
-		$limit = 50;
+		$page   = max(1, (int) $this->getInput('page', 1));
+		$limit  = 50;
 		$offset = ($page - 1) * $limit;
 
+		$stats = $this->repo->getDashboardStats();
+
 		$data = [
-			'tab'            => $tab,
-			'messages'       => $this->messages,
-			'stats'          => $this->repo->getDashboardStats(),
-			'top_devices'    => $this->repo->getTopDevices(10),
-			'recent_alerts'  => $this->repo->getAlertHistory(10),
-			'sources'        => $this->repo->getLogSources(),
-			'rules'          => $this->repo->getAlertRules(),
-			'history'        => $this->repo->getAlertHistory(50),
-			'retention_days' => $this->repo->getRetentionDays(),
-			'filters'        => $filters,
-			'logs'           => ($tab === 'search') ? $this->repo->getLogs($filters, $limit, $offset) : [],
-			'total_count'    => ($tab === 'search') ? $this->repo->getLogsCount($filters) : 0,
-			'page'           => $page,
-			'limit'          => $limit,
-			
-			// Statistics metrics
-			'severity_stats' => $this->repo->getDashboardStats()['severities'],
-			'facility_stats' => $this->repo->getLogsByFacility(),
-			'daily_trend'    => $this->repo->getDailyTrend(),
-			'hourly_trend'   => $this->repo->getHourlyTrend()
+			'tab'           => $tab,
+			'messages'      => $this->messages,
+			'stats'         => $stats,
+			'top_devices'   => $this->repo->getTopDevices(10),
+			'recent_alerts' => $this->repo->getAlertHistory(10),
+			'sources'       => $this->repo->getLogSources(),
+			'rules'         => $this->repo->getAlertRules(),
+			'history'       => $this->repo->getAlertHistory(50),
+			'retention_days'=> $this->repo->getRetentionDays(),
+			'filters'       => $filters,
+			'logs'          => ($tab === 'search')
+				? $this->repo->getLogs($filters, $limit, $offset)
+				: [],
+			'total_count'   => ($tab === 'search')
+				? $this->repo->getLogsCount($filters)
+				: 0,
+			'page'          => $page,
+			'limit'         => $limit,
+			'severity_stats'=> $stats['severities'],
+			'facility_stats'=> $this->repo->getLogsByFacility(),
+			'daily_trend'   => $this->repo->getDailyTrend(),
+			'hourly_trend'  => $this->repo->getHourlyTrend(),
 		];
 
 		$response = new CControllerResponseData($data);
@@ -141,52 +124,92 @@ class CControllerLogManager extends CController {
 		$this->setResponse($response);
 	}
 
+	// ── Task dispatcher ─────────────────────────────────────────────────
+
 	private function handleTask(string $task, string $tab): bool {
 		switch ($task) {
 			case 'toggle_source':
-				$this->repo->setSourceStatus((int)$this->getInput('source_id'), (int)$this->getInput('status'));
+				$this->repo->setSourceStatus(
+					(int) $this->getInput('source_id'),
+					(int) $this->getInput('status', 1)
+				);
 				$this->messages[] = ['type' => 'success', 'text' => 'Source status updated.'];
 				return true;
 
 			case 'delete_source':
-				$this->repo->deleteSource((int)$this->getInput('source_id'));
+				$this->repo->deleteSource((int) $this->getInput('source_id'));
 				$this->messages[] = ['type' => 'success', 'text' => 'Source deleted.'];
 				return true;
 
 			case 'save_rule':
-				$data = [
-					'rule_id'       => $this->getInput('rule_id', ''),
-					'name'          => $this->getInput('name', ''),
-					'regex_pattern' => $this->getInput('regex_pattern', ''),
-					'severity'      => $this->getInput('severity', 3),
-					'enabled'       => $this->getInput('enabled', 1)
-				];
-				if (empty($data['name']) || empty($data['regex_pattern'])) {
-					throw new \RuntimeException('Rule name and Regex pattern cannot be empty.');
+				$name    = trim((string) $this->getInput('name', ''));
+				$pattern = trim((string) $this->getInput('regex_pattern', ''));
+				if ($name === '' || $pattern === '') {
+					throw new \RuntimeException('Rule name and Regex pattern are required.');
 				}
-				if (@preg_match('/' . $data['regex_pattern'] . '/', '') === false) {
+				if (@preg_match('/' . $pattern . '/', '') === false) {
 					throw new \RuntimeException('Invalid regular expression pattern.');
 				}
-				$this->repo->saveAlertRule($data);
+				$this->repo->saveAlertRule([
+					'rule_id'       => $this->getInput('rule_id', ''),
+					'name'          => $name,
+					'regex_pattern' => $pattern,
+					'severity'      => (int) $this->getInput('severity', 3),
+					'enabled'       => $this->hasInput('enabled') ? 1 : 0,
+				]);
 				$this->messages[] = ['type' => 'success', 'text' => 'Alert rule saved.'];
 				return true;
 
 			case 'delete_rule':
-				$this->repo->deleteAlertRule((int)$this->getInput('rule_id'));
+				$this->repo->deleteAlertRule((int) $this->getInput('rule_id'));
 				$this->messages[] = ['type' => 'success', 'text' => 'Alert rule deleted.'];
 				return true;
 
 			case 'save_settings':
-				$days = (int)$this->getInput('retention_days', 30);
-				$this->repo->updateRetentionDays($days);
-				$this->messages[] = ['type' => 'success', 'text' => 'Retention policy updated successfully.'];
+				$this->repo->updateRetentionDays(max(1, (int) $this->getInput('retention_days', 30)));
+				$this->messages[] = ['type' => 'success', 'text' => 'Retention policy saved.'];
 				return true;
 		}
 		return false;
 	}
 
+	// ── Export handler ───────────────────────────────────────────────────
+
+	private function handleExport(): void {
+		$filters = [
+			'hostname'  => (string) $this->getInput('hostname',  ''),
+			'source_ip' => (string) $this->getInput('source_ip', ''),
+			'severity'  => (string) $this->getInput('severity',  ''),
+			'facility'  => (string) $this->getInput('facility',  ''),
+			'keyword'   => (string) $this->getInput('keyword',   ''),
+			'time_from' => (string) $this->getInput('time_from', ''),
+			'time_to'   => (string) $this->getInput('time_to',   ''),
+		];
+		$logs = $this->repo->getLogs($filters, 5000, 0);
+		$ts   = date('Ymd_His');
+
+		if ($this->getInput('export') === 'csv') {
+			header('Content-Type: text/csv');
+			header("Content-Disposition: attachment; filename=\"network_logs_{$ts}.csv\"");
+			$fp = fopen('php://output', 'w');
+			fputcsv($fp, ['Log ID', 'Time', 'Severity', 'Facility', 'Hostname', 'IP', 'Message']);
+			foreach ($logs as $log) {
+				fputcsv($fp, [
+					$log['log_id'], $log['received_at'], $log['severity'],
+					$log['facility'], $log['hostname'], $log['source_ip'], $log['message'],
+				]);
+			}
+			fclose($fp);
+		} else {
+			header('Content-Type: application/json');
+			header("Content-Disposition: attachment; filename=\"network_logs_{$ts}.json\"");
+			echo json_encode($logs, JSON_PRETTY_PRINT);
+		}
+		exit;
+	}
+
 	private function redirect(string $tab): void {
-		header('Location: zabbix.php?action=logmanager.view&tab=' . $tab);
+		header('Location: zabbix.php?action=logmanager.view&tab=' . urlencode($tab));
 		exit;
 	}
 }

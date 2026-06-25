@@ -1,828 +1,787 @@
 <?php
-/**
- * @var CView $this
- * @var array $data
- */
+declare(strict_types = 1);
 
-$severity_names = [
-    '' => _('All Severities'),
-    0 => _('0 - Emergency'),
-    1 => _('1 - Alert'),
-    2 => _('2 - Critical'),
-    3 => _('3 - Error'),
-    4 => _('4 - Warning'),
-    5 => _('5 - Notice'),
-    6 => _('6 - Informational'),
-    7 => _('7 - Debug')
+// ─── helpers ────────────────────────────────────────────────────────────────
+$h   = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$url = static fn(array $p = []): string =>
+    'zabbix.php?' . http_build_query(array_merge(['action' => 'logmanager.view'], $p));
+
+$tab = $data['tab'] ?? 'overview';
+
+// ─── lookups ────────────────────────────────────────────────────────────────
+$sevLabel = [
+    0 => 'Emergency', 1 => 'Alert',    2 => 'Critical', 3 => 'Error',
+    4 => 'Warning',   5 => 'Notice',   6 => 'Info',     7 => 'Debug',
 ];
-
-$severity_classes = [
-    0 => 'sev-emergency',
-    1 => 'sev-alert',
-    2 => 'sev-critical',
-    3 => 'sev-error',
-    4 => 'sev-warning',
-    5 => 'sev-notice',
-    6 => 'sev-info',
-    7 => 'sev-debug'
+$sevColor = [
+    0 => '#dc2626', 1 => '#ea580c', 2 => '#d97706', 3 => '#ca8a04',
+    4 => '#65a30d', 5 => '#0891b2', 6 => '#2563eb', 7 => '#7c3aed',
 ];
-
-$facility_names = [
-    '' => _('All Facilities'),
-    0 => _('0 - kern'),
-    1 => _('1 - user'),
-    2 => _('2 - mail'),
-    3 => _('3 - daemon'),
-    4 => _('4 - auth'),
-    5 => _('5 - syslog'),
-    6 => _('6 - lpr'),
-    7 => _('7 - news'),
-    8 => _('8 - uucp'),
-    9 => _('9 - cron'),
-    10 => _('10 - authpriv'),
-    11 => _('11 - ftp'),
-    12 => _('12 - ntp'),
-    13 => _('13 - security/audit'),
-    14 => _('14 - console'),
-    15 => _('15 - clock'),
-    16 => _('16 - local0'),
-    17 => _('17 - local1'),
-    18 => _('18 - local2'),
-    19 => _('19 - local3'),
-    20 => _('20 - local4'),
-    21 => _('21 - local5'),
-    22 => _('22 - local6'),
-    23 => _('23 - local7')
+$facLabel = [
+    0=>'kern',1=>'user',2=>'mail',3=>'daemon',4=>'auth',5=>'syslog',
+    6=>'lpr',7=>'news',8=>'uucp',9=>'cron',10=>'authpriv',11=>'ftp',
+    12=>'ntp',13=>'audit',14=>'console',15=>'clock',
+    16=>'local0',17=>'local1',18=>'local2',19=>'local3',
+    20=>'local4',21=>'local5',22=>'local6',23=>'local7',
 ];
-
-$retention_options = [
-    7 => _('7 Days'),
-    30 => _('30 Days'),
-    90 => _('90 Days'),
-    180 => _('180 Days'),
-    365 => _('365 Days')
+$tabs = [
+    'overview'   => ['icon' => '📊', 'label' => 'Overview'],
+    'livelogs'   => ['icon' => '📡', 'label' => 'Live Logs'],
+    'search'     => ['icon' => '🔍', 'label' => 'Search'],
+    'devices'    => ['icon' => '🖥️',  'label' => 'Devices'],
+    'alerts'     => ['icon' => '🚨', 'label' => 'Alerts'],
+    'statistics' => ['icon' => '📈', 'label' => 'Statistics'],
+    'settings'   => ['icon' => '⚙️',  'label' => 'Settings'],
 ];
-
+$filters         = $data['filters']        ?? [];
+$retentionOptions = [7=>'7 Days',30=>'30 Days',90=>'90 Days',180=>'180 Days',365=>'365 Days'];
 ?>
-<link rel="stylesheet" href="modules/zabbix-log-manager/assets/css/logmanager.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<div class="lm-app">
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   Log Manager — Embedded Stylesheet
+   ════════════════════════════════════════════════════════════════════ */
+:root{
+    --lm-bg:#0f1117;--lm-surface:#1a1d26;--lm-surface2:#21253a;
+    --lm-border:#2a2f45;--lm-accent:#3b82f6;--lm-accent2:#6366f1;
+    --lm-text:#e2e8f0;--lm-muted:#94a3b8;--lm-danger:#ef4444;
+    --lm-warn:#f59e0b;--lm-ok:#22c55e;--lm-radius:8px;
+    --lm-font:'Inter',system-ui,sans-serif;
+}
+.lm-app *{box-sizing:border-box;font-family:var(--lm-font);}
+.lm-app{background:var(--lm-bg);color:var(--lm-text);min-height:100vh;padding:16px;}
 
-<div class="logmanager-wrapper">
-    <!-- Header & Navigation -->
-    <div class="logmanager-header">
-        <h1><?= _('Log Manager') ?></h1>
-        <ul class="logmanager-tabs">
-            <li><a href="zabbix.php?action=logmanager.view&tab=overview" class="<?= $data['tab'] === 'overview' ? 'active' : '' ?>"><?= _('Overview') ?></a></li>
-            <li><a href="zabbix.php?action=logmanager.view&tab=livelogs" class="<?= $data['tab'] === 'livelogs' ? 'active' : '' ?>"><?= _('Live Logs') ?></a></li>
-            <li><a href="zabbix.php?action=logmanager.view&tab=search" class="<?= $data['tab'] === 'search' ? 'active' : '' ?>"><?= _('Search') ?></a></li>
-            <li><a href="zabbix.php?action=logmanager.view&tab=devices" class="<?= $data['tab'] === 'devices' ? 'active' : '' ?>"><?= _('Devices') ?></a></li>
-            <li><a href="zabbix.php?action=logmanager.view&tab=alerts" class="<?= $data['tab'] === 'alerts' ? 'active' : '' ?>"><?= _('Alerts') ?></a></li>
-            <li><a href="zabbix.php?action=logmanager.view&tab=statistics" class="<?= $data['tab'] === 'statistics' ? 'active' : '' ?>"><?= _('Statistics') ?></a></li>
-            <li><a href="zabbix.php?action=logmanager.view&tab=settings" class="<?= $data['tab'] === 'settings' ? 'active' : '' ?>"><?= _('Settings') ?></a></li>
-        </ul>
+/* ── Nav ── */
+.lm-nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;
+    background:var(--lm-surface);padding:8px;border-radius:10px;
+    border:1px solid var(--lm-border);}
+.lm-nav a{display:flex;align-items:center;gap:6px;padding:8px 14px;
+    border-radius:6px;text-decoration:none;color:var(--lm-muted);
+    font-size:13px;font-weight:500;transition:all .15s;}
+.lm-nav a:hover{background:var(--lm-surface2);color:var(--lm-text);}
+.lm-nav a.active{background:linear-gradient(135deg,var(--lm-accent),var(--lm-accent2));
+    color:#fff;box-shadow:0 2px 12px rgba(99,102,241,.35);}
+.lm-nav-icon{font-size:15px;}
+
+/* ── Alerts/Messages ── */
+.lm-msg{padding:12px 16px;border-radius:6px;margin-bottom:12px;font-size:13px;font-weight:500;}
+.lm-msg.success{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#86efac;}
+.lm-msg.error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;}
+
+/* ── KPI Cards ── */
+.lm-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.lm-kpi{background:var(--lm-surface);border:1px solid var(--lm-border);border-radius:var(--lm-radius);
+    padding:16px;position:relative;overflow:hidden;}
+.lm-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.lm-kpi.blue::before{background:linear-gradient(90deg,#3b82f6,#60a5fa);}
+.lm-kpi.red::before{background:linear-gradient(90deg,#ef4444,#f87171);}
+.lm-kpi.amber::before{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
+.lm-kpi.green::before{background:linear-gradient(90deg,#22c55e,#4ade80);}
+.lm-kpi.purple::before{background:linear-gradient(90deg,#8b5cf6,#a78bfa);}
+.lm-kpi.teal::before{background:linear-gradient(90deg,#14b8a6,#2dd4bf);}
+.lm-kpi-icon{font-size:22px;margin-bottom:6px;}
+.lm-kpi-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--lm-muted);margin-bottom:4px;}
+.lm-kpi-value{font-size:26px;font-weight:700;color:var(--lm-text);line-height:1;}
+
+/* ── 2-col grid ── */
+.lm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+@media(max-width:900px){.lm-grid2{grid-template-columns:1fr;}}
+
+/* ── Panel ── */
+.lm-panel{background:var(--lm-surface);border:1px solid var(--lm-border);border-radius:var(--lm-radius);}
+.lm-panel-head{display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px;border-bottom:1px solid var(--lm-border);}
+.lm-panel-head h2{margin:0;font-size:14px;font-weight:600;color:var(--lm-text);}
+.lm-panel-body{padding:16px;}
+.lm-panel-body.no-pad{padding:0;}
+
+/* ── Table ── */
+.lm-table{width:100%;border-collapse:collapse;font-size:13px;}
+.lm-table thead th{padding:10px 14px;text-align:left;color:var(--lm-muted);
+    font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    border-bottom:1px solid var(--lm-border);background:var(--lm-surface2);}
+.lm-table tbody tr{border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s;}
+.lm-table tbody tr:hover{background:rgba(255,255,255,.03);}
+.lm-table tbody td{padding:10px 14px;vertical-align:middle;color:var(--lm-text);}
+.lm-table .no-data td{color:var(--lm-muted);font-style:italic;text-align:center;padding:24px;}
+
+/* ── Tags / Badges ── */
+.lm-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap;}
+.sev-0{background:#dc2626;} .sev-1{background:#ea580c;} .sev-2{background:#d97706;}
+.sev-3{background:#ca8a04;} .sev-4{background:#65a30d;} .sev-5{background:#0891b2;}
+.sev-6{background:#2563eb;} .sev-7{background:#7c3aed;}
+.lm-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;}
+.lm-dot.on{background:var(--lm-ok);}
+.lm-dot.off{background:var(--lm-danger);}
+
+/* ── Buttons ── */
+.lm-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:5px;
+    font-size:13px;font-weight:500;cursor:pointer;text-decoration:none;border:1px solid transparent;transition:all .15s;}
+.lm-btn-primary{background:linear-gradient(135deg,var(--lm-accent),var(--lm-accent2));color:#fff;border:none;box-shadow:0 2px 8px rgba(99,102,241,.3);}
+.lm-btn-primary:hover{opacity:.88;}
+.lm-btn-ghost{background:var(--lm-surface2);color:var(--lm-muted);border-color:var(--lm-border);}
+.lm-btn-ghost:hover{color:var(--lm-text);background:rgba(255,255,255,.06);}
+.lm-btn-danger{background:rgba(239,68,68,.12);color:#f87171;border-color:rgba(239,68,68,.25);}
+.lm-btn-danger:hover{background:rgba(239,68,68,.22);}
+.lm-btn-sm{padding:4px 10px;font-size:11px;}
+
+/* ── Form ── */
+.lm-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;}
+.lm-fg{display:flex;flex-direction:column;gap:4px;}
+.lm-fg label{font-size:11px;font-weight:600;color:var(--lm-muted);letter-spacing:.05em;text-transform:uppercase;}
+.lm-fg input,.lm-fg select,.lm-fg textarea{
+    background:var(--lm-surface2);border:1px solid var(--lm-border);
+    border-radius:5px;padding:8px 10px;color:var(--lm-text);font-size:13px;outline:none;
+    transition:border .15s;}
+.lm-fg input:focus,.lm-fg select:focus,.lm-fg textarea:focus{border-color:var(--lm-accent);}
+.lm-fg input::placeholder{color:var(--lm-muted);}
+.lm-fg option{background:var(--lm-surface);}
+.lm-form-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;}
+.lm-help{font-size:11px;color:var(--lm-muted);margin-top:2px;}
+
+/* ── Chart container ── */
+.lm-chart-box{height:220px;position:relative;padding:4px 0;}
+
+/* ── Live Log table ── */
+.lm-scroll{max-height:520px;overflow-y:auto;}
+.lm-scroll::-webkit-scrollbar{width:4px;}
+.lm-scroll::-webkit-scrollbar-track{background:var(--lm-surface);}
+.lm-scroll::-webkit-scrollbar-thumb{background:var(--lm-border);border-radius:2px;}
+.lm-log-msg{font-family:'Courier New',monospace;font-size:12px;word-break:break-all;}
+.lm-stream-ctrl{display:flex;align-items:center;gap:10px;}
+.lm-status-pill{padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;}
+.lm-status-pill.live{background:rgba(34,197,94,.15);color:#4ade80;}
+.lm-status-pill.paused{background:rgba(239,68,68,.15);color:#f87171;}
+
+/* ── Alert rule form slide ── */
+.lm-rule-form{background:var(--lm-surface2);border:1px solid var(--lm-border);
+    border-radius:var(--lm-radius);padding:16px;margin-bottom:16px;}
+.lm-rule-form h3{margin:0 0 14px;font-size:14px;font-weight:600;}
+
+/* ── Settings info table ── */
+.lm-info-table{width:100%;border-collapse:collapse;font-size:13px;}
+.lm-info-table td{padding:9px 12px;border-bottom:1px solid var(--lm-border);}
+.lm-info-table td:first-child{color:var(--lm-muted);font-weight:600;width:35%;}
+.lm-info-table code{background:var(--lm-surface2);padding:2px 6px;border-radius:3px;font-size:12px;}
+
+/* ── Pagination ── */
+.lm-pager{display:flex;justify-content:center;gap:4px;padding:14px;}
+.lm-pager a{padding:5px 11px;border-radius:5px;font-size:12px;}
+.lm-pager a.active{background:var(--lm-accent);color:#fff;}
+
+/* ── Alert history snippet ── */
+.lm-ah-host{font-size:11px;color:var(--lm-muted);font-weight:600;}
+.lm-ah-msg{font-size:12px;font-family:monospace;word-break:break-all;}
+
+/* ── Vendor chip ── */
+.lm-vendor{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;}
+.lm-vendor{background:#334155;color:#94a3b8;}
+
+/* ── Note box ── */
+.lm-note{background:rgba(59,130,246,.08);border:1px dashed rgba(59,130,246,.25);
+    border-radius:6px;padding:12px;font-size:12px;color:var(--lm-muted);margin-top:12px;}
+
+/* ── Checkbox inline ── */
+.lm-check{display:flex;align-items:center;gap:8px;font-size:13px;}
+.lm-check input[type=checkbox]{width:16px;height:16px;accent-color:var(--lm-accent);}
+</style>
+
+<!-- ── Navigation ───────────────────────────────────────────────────────── -->
+<nav class="lm-nav">
+    <?php foreach ($tabs as $key => $t): ?>
+        <a href="<?= $url(['tab' => $key]) ?>" class="<?= $tab === $key ? 'active' : '' ?>">
+            <span class="lm-nav-icon"><?= $t['icon'] ?></span>
+            <?= $h($t['label']) ?>
+        </a>
+    <?php endforeach ?>
+</nav>
+
+<!-- ── Flash messages ───────────────────────────────────────────────────── -->
+<?php foreach ($data['messages'] as $msg): ?>
+    <div class="lm-msg <?= $h($msg['type']) ?>">
+        <?= $msg['type'] === 'error' ? '⚠️' : '✅' ?> <?= $h($msg['text']) ?>
+    </div>
+<?php endforeach ?>
+
+<?php /* ═══════════════════════════════════ OVERVIEW ═══════════════════════════════════ */ ?>
+<?php if ($tab === 'overview'): ?>
+
+<div class="lm-kpi-grid">
+    <?php
+    $stats = $data['stats'];
+    $crit  = $stats['severities'][0] + $stats['severities'][1]
+           + $stats['severities'][2] + $stats['severities'][3];
+    $warn  = $stats['severities'][4];
+    $info  = $stats['severities'][5] + $stats['severities'][6];
+    $kpis  = [
+        ['blue',   '📋', 'Total Logs Today', number_format($stats['total_today'])],
+        ['red',    '🔴', 'Critical / Error',  number_format($crit)],
+        ['amber',  '⚠️',  'Warning',           number_format($warn)],
+        ['green',  '💬', 'Info / Notice',     number_format($info)],
+        ['purple', '🖥️',  'Active Devices',    number_format($stats['devices_count'])],
+        ['teal',   '⚡', 'Logs / Second',     $stats['logs_per_second']],
+    ];
+    foreach ($kpis as [$cls, $icon, $label, $val]): ?>
+    <div class="lm-kpi <?= $cls ?>">
+        <div class="lm-kpi-icon"><?= $icon ?></div>
+        <div class="lm-kpi-label"><?= $h($label) ?></div>
+        <div class="lm-kpi-value"><?= $h((string)$val) ?></div>
+    </div>
+    <?php endforeach ?>
+</div>
+
+<div class="lm-grid2">
+    <!-- Top Devices -->
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>🏆 Top Devices Today</h2></div>
+        <div class="lm-panel-body no-pad">
+            <table class="lm-table">
+                <thead><tr>
+                    <th>Hostname</th><th>IP Address</th><th>Log Count</th>
+                </tr></thead>
+                <tbody>
+                <?php if (empty($data['top_devices'])): ?>
+                    <tr class="no-data"><td colspan="3">No logs received today.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($data['top_devices'] as $d): ?>
+                    <tr>
+                        <td><strong><?= $h($d['hostname']) ?></strong></td>
+                        <td><code><?= $h($d['source_ip']) ?></code></td>
+                        <td><?= number_format($d['cnt']) ?></td>
+                    </tr>
+                    <?php endforeach ?>
+                <?php endif ?>
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <!-- Messages Block -->
-    <?php if (!empty($data['messages'])): ?>
-        <?php foreach ($data['messages'] as $msg): ?>
-            <div class="<?= $msg['type'] === 'error' ? 'error-msg-box' : 'success-msg-box' ?>">
-                <?= htmlspecialchars($msg['text']) ?>
-            </div>
-        <?php endforeach; ?>
-    <?php endif; ?>
-
-    <!-- ── TAB CONTENT ── -->
-
-    <?php if ($data['tab'] === 'overview'): ?>
-        <!-- Cards Row -->
-        <div class="logmanager-grid logmanager-cards">
-            <div class="card bg-total">
-                <div class="card-info">
-                    <h3><?= _('Total Logs Today') ?></h3>
-                    <div class="value"><?= number_format($data['stats']['total_today']) ?></div>
-                </div>
-            </div>
-            <div class="card bg-critical">
-                <div class="card-info">
-                    <h3><?= _('Critical Logs') ?></h3>
-                    <div class="value"><?= number_format($data['stats']['severities'][0] + $data['stats']['severities'][1] + $data['stats']['severities'][2] + $data['stats']['severities'][3]) ?></div>
-                </div>
-            </div>
-            <div class="card bg-warning">
-                <div class="card-info">
-                    <h3><?= _('Warning Logs') ?></h3>
-                    <div class="value"><?= number_format($data['stats']['severities'][4]) ?></div>
-                </div>
-            </div>
-            <div class="card bg-info">
-                <div class="card-info">
-                    <h3><?= _('Info & Notice') ?></h3>
-                    <div class="value"><?= number_format($data['stats']['severities'][5] + $data['stats']['severities'][6]) ?></div>
-                </div>
-            </div>
-            <div class="card bg-devices">
-                <div class="card-info">
-                    <h3><?= _('Active Devices') ?></h3>
-                    <div class="value"><?= number_format($data['stats']['devices_count']) ?></div>
-                </div>
-            </div>
-            <div class="card bg-rate">
-                <div class="card-info">
-                    <h3><?= _('Logs / Sec') ?></h3>
-                    <div class="value"><?= $data['stats']['logs_per_second'] ?></div>
-                </div>
-            </div>
+    <!-- Recent Alerts -->
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>🚨 Recent Alerts</h2></div>
+        <div class="lm-panel-body no-pad">
+            <table class="lm-table">
+                <thead><tr>
+                    <th>Rule</th><th>Severity</th><th>Host</th><th>Time</th>
+                </tr></thead>
+                <tbody>
+                <?php if (empty($data['recent_alerts'])): ?>
+                    <tr class="no-data"><td colspan="4">No recent alert matches.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($data['recent_alerts'] as $a): ?>
+                    <tr>
+                        <td><?= $h($a['rule_name']) ?></td>
+                        <td>
+                            <span class="lm-tag sev-<?= (int)$a['rule_severity'] ?>">
+                                <?= $h($sevLabel[$a['rule_severity']] ?? 'Unknown') ?>
+                            </span>
+                        </td>
+                        <td><?= $h($a['hostname']) ?></td>
+                        <td style="font-size:11px;color:var(--lm-muted)"><?= $h($a['matched_at']) ?></td>
+                    </tr>
+                    <?php endforeach ?>
+                <?php endif ?>
+                </tbody>
+            </table>
         </div>
+    </div>
+</div>
 
-        <div class="logmanager-grid logmanager-two-columns">
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Top Devices (Logs Today)') ?></h2>
-                </div>
-                <div class="widget-body">
-                    <?php if (empty($data['top_devices'])): ?>
-                        <p class="no-data"><?= _('No logs received today.') ?></p>
-                    <?php else: ?>
-                        <table class="list-table">
-                            <thead>
-                                <tr>
-                                    <th><?= _('Device / Hostname') ?></th>
-                                    <th><?= _('IP Address') ?></th>
-                                    <th class="text-right"><?= _('Count') ?></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($data['top_devices'] as $device): ?>
-                                    <tr>
-                                        <td><strong><?= htmlspecialchars($device['hostname']) ?></strong></td>
-                                        <td><?= htmlspecialchars($device['source_ip']) ?></td>
-                                        <td class="text-right"><?= number_format($device['cnt']) ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    <?php endif; ?>
-                </div>
-            </div>
+<?php /* ═══════════════════════════════════ LIVE LOGS ═══════════════════════════════════ */ ?>
+<?php elseif ($tab === 'livelogs'): ?>
 
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Recent Alerts') ?></h2>
-                </div>
-                <div class="widget-body">
-                    <?php if (empty($data['recent_alerts'])): ?>
-                        <p class="no-data"><?= _('No recent alerts matching regex rules.') ?></p>
-                    <?php else: ?>
-                        <table class="list-table">
-                            <thead>
-                                <tr>
-                                    <th><?= _('Rule') ?></th>
-                                    <th><?= _('Severity') ?></th>
-                                    <th><?= _('Device') ?></th>
-                                    <th><?= _('Time') ?></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($data['recent_alerts'] as $alert): ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($alert['rule_name']) ?></td>
-                                        <td>
-                                            <span class="tag <?= $severity_classes[$alert['rule_severity']] ?>">
-                                                <?= htmlspecialchars(str_replace('All ', '', $severity_names[$alert['rule_severity']])) ?>
-                                            </span>
-                                        </td>
-                                        <td><?= htmlspecialchars($alert['hostname']) ?></td>
-                                        <td><?= htmlspecialchars($alert['matched_at']) ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    <?php endif; ?>
-                </div>
-            </div>
+<div class="lm-panel">
+    <div class="lm-panel-head">
+        <h2>📡 Live Log Tail</h2>
+        <div class="lm-stream-ctrl">
+            <button id="btn-pause" class="lm-btn lm-btn-ghost lm-btn-sm">⏸ Pause</button>
+            <button id="btn-clear" class="lm-btn lm-btn-ghost lm-btn-sm">🗑 Clear</button>
+            <span class="lm-status-pill live" id="stream-badge">● Live</span>
         </div>
+    </div>
+    <div class="lm-panel-body no-pad">
+        <div class="lm-scroll">
+            <table class="lm-table" id="live-tbl">
+                <thead><tr>
+                    <th style="width:14%">Time</th>
+                    <th style="width:13%">Hostname</th>
+                    <th style="width:11%">Source IP</th>
+                    <th style="width:10%">Severity</th>
+                    <th style="width:9%">Facility</th>
+                    <th>Message</th>
+                </tr></thead>
+                <tbody id="live-tbody">
+                    <tr class="no-data"><td colspan="6">Waiting for incoming logs…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-    <?php elseif ($data['tab'] === 'livelogs'): ?>
-        <div class="widget-panel">
-            <div class="widget-header flex-header">
-                <h2><?= _('Live Tail Stream') ?></h2>
-                <div class="header-controls">
-                    <button type="button" id="btn-pause-resume" class="btn-alt"><?= _('Pause') ?></button>
-                    <button type="button" id="btn-clear-logs" class="btn-alt"><?= _('Clear View') ?></button>
-                    <span class="status-indicator online" id="stream-status"><?= _('Streaming') ?></span>
+<script>
+(function(){
+const sevLabel = <?= json_encode($sevLabel) ?>;
+const facLabel = <?= json_encode($facLabel) ?>;
+const tbody  = document.getElementById('live-tbody');
+const badge  = document.getElementById('stream-badge');
+let paused   = false;
+
+function esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+function sevClass(s){ const m=['sev-0','sev-1','sev-2','sev-3','sev-4','sev-5','sev-6','sev-7']; return m[s]||'sev-7'; }
+
+function render(logs){
+    if(!logs.length) return;
+    let html = '';
+    logs.forEach(l=>{
+        html += `<tr>
+            <td style="font-size:11px;color:var(--lm-muted)">${esc(l.received_at)}</td>
+            <td><strong>${esc(l.hostname)}</strong></td>
+            <td><code style="font-size:11px">${esc(l.source_ip)}</code></td>
+            <td><span class="lm-tag ${sevClass(l.severity)}">${esc(sevLabel[l.severity]||l.severity)}</span></td>
+            <td style="font-size:11px;color:var(--lm-muted)">${esc(facLabel[l.facility]||l.facility)}</td>
+            <td class="lm-log-msg">${esc(l.message)}</td>
+        </tr>`;
+    });
+    tbody.innerHTML = html;
+}
+
+function fetch_logs(){
+    if(paused) return;
+    fetch('<?= $url(['ajax' => 1]) ?>')
+        .then(r=>r.json()).then(d=>{ if(d.success) render(d.logs); })
+        .catch(()=>{});
+}
+
+document.getElementById('btn-pause').addEventListener('click', function(){
+    paused = !paused;
+    this.textContent = paused ? '▶ Resume' : '⏸ Pause';
+    badge.textContent = paused ? '⏸ Paused' : '● Live';
+    badge.className = 'lm-status-pill ' + (paused ? 'paused' : 'live');
+});
+document.getElementById('btn-clear').addEventListener('click', ()=>{
+    tbody.innerHTML = '<tr class="no-data"><td colspan="6">Cleared.</td></tr>';
+});
+
+fetch_logs();
+setInterval(fetch_logs, 2000);
+})();
+</script>
+
+<?php /* ═══════════════════════════════════ SEARCH ═══════════════════════════════════ */ ?>
+<?php elseif ($tab === 'search'): ?>
+
+<div class="lm-panel" style="margin-bottom:16px">
+    <div class="lm-panel-head"><h2>🔍 Search & Filter</h2></div>
+    <div class="lm-panel-body">
+        <form action="zabbix.php" method="get">
+            <input type="hidden" name="action" value="logmanager.view">
+            <input type="hidden" name="tab"    value="search">
+            <div class="lm-form-grid">
+                <?php
+                $sf = [
+                    ['time_from','Time From','YYYY-MM-DD HH:MM:SS'],
+                    ['time_to',  'Time To',  'YYYY-MM-DD HH:MM:SS'],
+                    ['hostname', 'Hostname',  'e.g. Core-SW'],
+                    ['source_ip','Source IP', 'e.g. 192.168.1.1'],
+                ];
+                foreach ($sf as [$name,$label,$ph]): ?>
+                <div class="lm-fg">
+                    <label><?= $label ?></label>
+                    <input type="text" name="<?= $name ?>" value="<?= $h($filters[$name] ?? '') ?>" placeholder="<?= $ph ?>">
+                </div>
+                <?php endforeach ?>
+                <div class="lm-fg">
+                    <label>Severity</label>
+                    <select name="severity">
+                        <option value="">All Severities</option>
+                        <?php foreach ($sevLabel as $v=>$lbl): ?>
+                        <option value="<?= $v ?>" <?= ($filters['severity']??'') === (string)$v ? 'selected' : '' ?>>
+                            <?= $v ?> — <?= $lbl ?>
+                        </option>
+                        <?php endforeach ?>
+                    </select>
+                </div>
+                <div class="lm-fg">
+                    <label>Facility</label>
+                    <select name="facility">
+                        <option value="">All Facilities</option>
+                        <?php foreach ($facLabel as $v=>$lbl): ?>
+                        <option value="<?= $v ?>" <?= ($filters['facility']??'') === (string)$v ? 'selected' : '' ?>>
+                            <?= $v ?> — <?= $lbl ?>
+                        </option>
+                        <?php endforeach ?>
+                    </select>
                 </div>
             </div>
-            <div class="widget-body no-padding scrollable-table-container">
-                <table class="list-table log-table" id="live-logs-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 15%"><?= _('Time') ?></th>
-                            <th style="width: 15%"><?= _('Hostname') ?></th>
-                            <th style="width: 12%"><?= _('Source IP') ?></th>
-                            <th style="width: 10%"><?= _('Severity') ?></th>
-                            <th style="width: 10%"><?= _('Facility') ?></th>
-                            <th style="width: 38%"><?= _('Message') ?></th>
-                        </tr>
-                    </thead>
-                    <tbody id="live-logs-tbody">
-                        <tr id="no-logs-row">
-                            <td colspan="6" class="text-center no-data"><?= _('Waiting for logs...') ?></td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="lm-fg" style="margin-top:10px">
+                <label>Keyword / Full-Text Search</label>
+                <input type="text" name="keyword" value="<?= $h($filters['keyword'] ?? '') ?>" placeholder="Search in log messages…">
             </div>
-        </div>
-        <script src="modules/zabbix-log-manager/assets/js/logmanager.js"></script>
-        <script>
-            document.addEventListener("DOMContentLoaded", function() {
-                initLiveLogs();
-            });
-        </script>
+            <div class="lm-form-actions">
+                <button type="submit" class="lm-btn lm-btn-primary">🔍 Search</button>
+                <a href="<?= $url(['tab' => 'search']) ?>" class="lm-btn lm-btn-ghost">↺ Reset</a>
+                <button type="submit" name="export" value="csv"  class="lm-btn lm-btn-ghost" style="margin-left:auto">⬇ CSV</button>
+                <button type="submit" name="export" value="json" class="lm-btn lm-btn-ghost">⬇ JSON</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-    <?php elseif ($data['tab'] === 'search'): ?>
-        <div class="widget-panel">
-            <div class="widget-header">
-                <h2><?= _('Search & Filter Logs') ?></h2>
-            </div>
-            <div class="widget-body">
-                <form action="zabbix.php" method="get" class="search-form">
-                    <input type="hidden" name="action" value="logmanager.view">
-                    <input type="hidden" name="tab" value="search">
-                    
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="time_from"><?= _('Time From') ?></label>
-                            <input type="text" id="time_from" name="time_from" value="<?= htmlspecialchars($data['filters']['time_from']) ?>" placeholder="YYYY-MM-DD HH:MM:SS">
+<div class="lm-panel">
+    <div class="lm-panel-head">
+        <h2>Search Results</h2>
+        <span style="font-size:12px;color:var(--lm-muted)"><?= number_format($data['total_count']) ?> records</span>
+    </div>
+    <div class="lm-panel-body no-pad">
+        <div class="lm-scroll">
+        <table class="lm-table">
+            <thead><tr>
+                <th style="width:14%">Time</th>
+                <th style="width:13%">Hostname</th>
+                <th style="width:11%">Source IP</th>
+                <th style="width:10%">Severity</th>
+                <th style="width:9%">Facility</th>
+                <th>Message</th>
+            </tr></thead>
+            <tbody>
+            <?php if (empty($data['logs'])): ?>
+                <tr class="no-data"><td colspan="6">No logs matched your filters.</td></tr>
+            <?php else: ?>
+                <?php foreach ($data['logs'] as $log): ?>
+                <tr>
+                    <td style="font-size:11px;color:var(--lm-muted)"><?= $h($log['received_at']) ?></td>
+                    <td><strong><?= $h($log['hostname']) ?></strong></td>
+                    <td><code style="font-size:11px"><?= $h($log['source_ip']) ?></code></td>
+                    <td>
+                        <span class="lm-tag sev-<?= (int)$log['severity'] ?>">
+                            <?= $h($sevLabel[$log['severity']] ?? (string)$log['severity']) ?>
+                        </span>
+                    </td>
+                    <td style="font-size:11px;color:var(--lm-muted)">
+                        <?= $h($facLabel[$log['facility']] ?? (string)$log['facility']) ?>
+                    </td>
+                    <td class="lm-log-msg"><?= $h($log['message']) ?></td>
+                </tr>
+                <?php endforeach ?>
+            <?php endif ?>
+            </tbody>
+        </table>
+        </div>
+        <?php if ($data['total_count'] > $data['limit']): ?>
+        <div class="lm-pager">
+            <?php
+            $total_pages = (int) ceil($data['total_count'] / $data['limit']);
+            $cur         = $data['page'];
+            $base        = array_merge($filters, ['action'=>'logmanager.view','tab'=>'search']);
+            if ($cur > 1):
+                $base['page'] = $cur - 1;
+                echo '<a href="zabbix.php?' . http_build_query($base) . '" class="lm-btn lm-btn-ghost lm-btn-sm">‹</a>';
+            endif;
+            for ($p = max(1,$cur-2); $p <= min($total_pages,$cur+2); $p++):
+                $base['page'] = $p;
+                echo '<a href="zabbix.php?' . http_build_query($base) . '" class="lm-btn lm-btn-ghost lm-btn-sm' . ($p===$cur?' active':'') . '">' . $p . '</a>';
+            endfor;
+            if ($cur < $total_pages):
+                $base['page'] = $cur + 1;
+                echo '<a href="zabbix.php?' . http_build_query($base) . '" class="lm-btn lm-btn-ghost lm-btn-sm">›</a>';
+            endif;
+            ?>
+        </div>
+        <?php endif ?>
+    </div>
+</div>
+
+<?php /* ═══════════════════════════════════ DEVICES ═══════════════════════════════════ */ ?>
+<?php elseif ($tab === 'devices'): ?>
+
+<div class="lm-panel">
+    <div class="lm-panel-head"><h2>🖥️ Log Sources &amp; Device Mapping</h2></div>
+    <div class="lm-panel-body no-pad">
+        <table class="lm-table">
+            <thead><tr>
+                <th>Hostname</th><th>IP Address</th><th>Vendor</th>
+                <th>First Seen</th><th>Last Seen</th><th>Zabbix Host</th>
+                <th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody>
+            <?php if (empty($data['sources'])): ?>
+                <tr class="no-data"><td colspan="8">No devices discovered yet. Check that the syslog daemon is running.</td></tr>
+            <?php else: ?>
+                <?php foreach ($data['sources'] as $s): ?>
+                <tr>
+                    <td><strong><?= $h($s['hostname']) ?></strong></td>
+                    <td><code style="font-size:11px"><?= $h($s['ip_address']) ?></code></td>
+                    <td><span class="lm-vendor"><?= $h($s['vendor']) ?></span></td>
+                    <td style="font-size:11px;color:var(--lm-muted)"><?= $h($s['first_seen']) ?></td>
+                    <td style="font-size:11px;color:var(--lm-muted)"><?= $h($s['last_seen']) ?></td>
+                    <td>
+                        <?php if (!empty($s['hostid'])): ?>
+                            <a href="zabbix.php?action=host.edit&amp;hostid=<?= (int)$s['hostid'] ?>" style="color:var(--lm-accent);text-decoration:none;font-size:12px">
+                                <span class="lm-dot on"></span><?= $h($s['zabbix_host_name']) ?>
+                            </a>
+                        <?php else: ?>
+                            <span class="lm-dot off"></span><span style="color:var(--lm-muted);font-size:12px">Unmapped</span>
+                        <?php endif ?>
+                    </td>
+                    <td>
+                        <?php if ((int)$s['enabled'] === 1): ?>
+                            <span style="color:var(--lm-ok);font-size:12px;font-weight:600">● Active</span>
+                        <?php else: ?>
+                            <span style="color:var(--lm-danger);font-size:12px;font-weight:600">● Disabled</span>
+                        <?php endif ?>
+                    </td>
+                    <td style="display:flex;gap:4px;flex-wrap:wrap">
+                        <a href="<?= $url(['tab'=>'livelogs','source_id'=>(int)$s['source_id']]) ?>" class="lm-btn lm-btn-ghost lm-btn-sm">Live</a>
+                        <a href="<?= $url(['tab'=>'search','hostname'=>$s['hostname'],'source_ip'=>$s['ip_address']]) ?>" class="lm-btn lm-btn-ghost lm-btn-sm">Search</a>
+                        <?php if ((int)$s['enabled'] === 1): ?>
+                        <a href="<?= $url(['tab'=>'devices','task'=>'toggle_source','source_id'=>(int)$s['source_id'],'status'=>0]) ?>" class="lm-btn lm-btn-ghost lm-btn-sm">Disable</a>
+                        <?php else: ?>
+                        <a href="<?= $url(['tab'=>'devices','task'=>'toggle_source','source_id'=>(int)$s['source_id'],'status'=>1]) ?>" class="lm-btn lm-btn-ghost lm-btn-sm">Enable</a>
+                        <?php endif ?>
+                        <a href="<?= $url(['tab'=>'devices','task'=>'delete_source','source_id'=>(int)$s['source_id']]) ?>" class="lm-btn lm-btn-danger lm-btn-sm" onclick="return confirm('Delete this source and ALL its logs?')">Delete</a>
+                    </td>
+                </tr>
+                <?php endforeach ?>
+            <?php endif ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<?php /* ═══════════════════════════════════ ALERTS ═══════════════════════════════════ */ ?>
+<?php elseif ($tab === 'alerts'): ?>
+
+<div class="lm-grid2">
+    <!-- Rules Panel -->
+    <div class="lm-panel">
+        <div class="lm-panel-head">
+            <h2>🚨 Alert Rules</h2>
+            <button class="lm-btn lm-btn-primary lm-btn-sm" onclick="document.getElementById('rule-form').style.display='block'">+ New Rule</button>
+        </div>
+        <div class="lm-panel-body">
+            <!-- Create / Edit form -->
+            <div id="rule-form" class="lm-rule-form" style="display:none">
+                <h3 id="form-title">Create Alert Rule</h3>
+                <form action="<?= $url(['tab'=>'alerts','task'=>'save_rule']) ?>" method="post">
+                    <input type="hidden" id="fld-rule_id" name="rule_id" value="">
+                    <div class="lm-form-grid" style="grid-template-columns:1fr">
+                        <div class="lm-fg">
+                            <label>Rule Name</label>
+                            <input type="text" id="fld-name" name="name" placeholder="e.g. BGP Session Down" required>
                         </div>
-                        <div class="form-group">
-                            <label for="time_to"><?= _('Time To') ?></label>
-                            <input type="text" id="time_to" name="time_to" value="<?= htmlspecialchars($data['filters']['time_to']) ?>" placeholder="YYYY-MM-DD HH:MM:SS">
+                        <div class="lm-fg">
+                            <label>Regex Pattern</label>
+                            <input type="text" id="fld-regex" name="regex_pattern" placeholder="e.g. BGP.*neighbor.*lost" required>
+                            <span class="lm-help">Case-insensitive regex matched against log messages.</span>
                         </div>
-                        <div class="form-group">
-                            <label for="hostname"><?= _('Hostname') ?></label>
-                            <input type="text" id="hostname" name="hostname" value="<?= htmlspecialchars($data['filters']['hostname']) ?>" placeholder="e.g. Cisco-Core">
-                        </div>
-                        <div class="form-group">
-                            <label for="source_ip"><?= _('Source IP') ?></label>
-                            <input type="text" id="source_ip" name="source_ip" value="<?= htmlspecialchars($data['filters']['source_ip']) ?>" placeholder="e.g. 192.168.1.1">
-                        </div>
-                        <div class="form-group">
-                            <label for="severity"><?= _('Severity') ?></label>
-                            <select id="severity" name="severity">
-                                <?php foreach ($severity_names as $val => $name): ?>
-                                    <option value="<?= $val ?>" <?= $data['filters']['severity'] === (string)$val ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
-                                <?php endforeach; ?>
+                        <div class="lm-fg">
+                            <label>Severity</label>
+                            <select id="fld-severity" name="severity">
+                                <?php foreach ($sevLabel as $v=>$lbl): ?>
+                                <option value="<?= $v ?>"><?= $v ?> — <?= $lbl ?></option>
+                                <?php endforeach ?>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="facility"><?= _('Facility') ?></label>
-                            <select id="facility" name="facility">
-                                <?php foreach ($facility_names as $val => $name): ?>
-                                    <option value="<?= $val ?>" <?= $data['filters']['facility'] === (string)$val ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                        <div class="lm-check">
+                            <input type="checkbox" id="fld-enabled" name="enabled" value="1" checked>
+                            <label for="fld-enabled">Enabled</label>
                         </div>
                     </div>
-
-                    <div class="form-group full-width" style="margin-top: 10px;">
-                        <label for="keyword"><?= _('Full Text Search / Keyword') ?></label>
-                        <input type="text" id="keyword" name="keyword" value="<?= htmlspecialchars($data['filters']['keyword']) ?>" placeholder="Search logs using keyword or text...">
-                    </div>
-
-                    <div class="form-buttons" style="margin-top: 15px;">
-                        <button type="submit" class="btn-primary"><?= _('Search') ?></button>
-                        <a href="zabbix.php?action=logmanager.view&tab=search" class="btn-alt"><?= _('Reset') ?></a>
-                        
-                        <div style="float: right;">
-                            <button type="submit" name="export" value="csv" class="btn-alt"><?= _('Export CSV') ?></button>
-                            <button type="submit" name="export" value="json" class="btn-alt"><?= _('Export JSON') ?></button>
-                        </div>
+                    <div class="lm-form-actions">
+                        <button type="submit" class="lm-btn lm-btn-primary">💾 Save Rule</button>
+                        <button type="button" class="lm-btn lm-btn-ghost" onclick="document.getElementById('rule-form').style.display='none'">Cancel</button>
                     </div>
                 </form>
             </div>
-        </div>
 
-        <div class="widget-panel" style="margin-top: 20px;">
-            <div class="widget-header flex-header">
-                <h2><?= _('Search Results') ?></h2>
-                <span>Total Matches: <?= number_format($data['total_count']) ?></span>
-            </div>
-            <div class="widget-body no-padding">
-                <table class="list-table log-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 15%"><?= _('Time') ?></th>
-                            <th style="width: 15%"><?= _('Hostname') ?></th>
-                            <th style="width: 12%"><?= _('Source IP') ?></th>
-                            <th style="width: 10%"><?= _('Severity') ?></th>
-                            <th style="width: 10%"><?= _('Facility') ?></th>
-                            <th style="width: 38%"><?= _('Message') ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($data['logs'])): ?>
-                            <tr>
-                                <td colspan="6" class="text-center no-data"><?= _('No matching logs found.') ?></td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($data['logs'] as $log): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($log['received_at']) ?></td>
-                                    <td><strong><?= htmlspecialchars($log['hostname']) ?></strong></td>
-                                    <td><?= htmlspecialchars($log['source_ip']) ?></td>
-                                    <td>
-                                        <span class="tag <?= $severity_classes[$log['severity']] ?>">
-                                            <?= (int)$log['severity'] ?> - <?= htmlspecialchars(str_replace('All ', '', $severity_names[$log['severity']])) ?>
-                                        </span>
-                                    </td>
-                                    <td><?= (int)$log['facility'] ?> - <?= htmlspecialchars(str_replace('All ', '', $facility_names[$log['facility']])) ?></td>
-                                    <td class="log-message-cell"><?= htmlspecialchars($log['message']) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-
-                <!-- Pagination -->
-                <?php if ($data['total_count'] > $data['limit']): ?>
-                    <div class="pagination">
-                        <?php
-                        $total_pages = ceil($data['total_count'] / $data['limit']);
-                        $current_page = $data['page'];
-                        
-                        $start_page = max(1, $current_page - 2);
-                        $end_page = min($total_pages, $current_page + 2);
-                        
-                        $q_params = $data['filters'];
-                        $q_params['action'] = 'logmanager.view';
-                        $q_params['tab'] = 'search';
-                        
-                        if ($current_page > 1) {
-                            $q_params['page'] = $current_page - 1;
-                            echo '<a href="zabbix.php?' . http_build_query($q_params) . '" class="btn-alt">&laquo; Previous</a>';
-                        }
-                        for ($p = $start_page; $p <= $end_page; $p++) {
-                            $q_params['page'] = $p;
-                            $active_class = ($p === $current_page) ? 'active' : '';
-                            echo '<a href="zabbix.php?' . http_build_query($q_params) . '" class="btn-alt ' . $active_class . '">' . $p . '</a>';
-                        }
-                        if ($current_page < $total_pages) {
-                            $q_params['page'] = $current_page + 1;
-                            echo '<a href="zabbix.php?' . http_build_query($q_params) . '" class="btn-alt">Next &raquo;</a>';
-                        }
-                        ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-
-    <?php elseif ($data['tab'] === 'devices'): ?>
-        <div class="widget-panel">
-            <div class="widget-header">
-                <h2><?= _('Log Sources & Device Mapping') ?></h2>
-            </div>
-            <div class="widget-body no-padding">
-                <table class="list-table">
-                    <thead>
-                        <tr>
-                            <th><?= _('Hostname') ?></th>
-                            <th><?= _('IP Address') ?></th>
-                            <th><?= _('Vendor') ?></th>
-                            <th><?= _('First Seen') ?></th>
-                            <th><?= _('Last Seen') ?></th>
-                            <th><?= _('Zabbix Host Integration') ?></th>
-                            <th><?= _('Status') ?></th>
-                            <th><?= _('Actions') ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($data['sources'])): ?>
-                            <tr>
-                                <td colspan="8" class="text-center no-data"><?= _('No devices found.') ?></td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($data['sources'] as $source): ?>
-                                <tr>
-                                    <td><strong><?= htmlspecialchars($source['hostname']) ?></strong></td>
-                                    <td><?= htmlspecialchars($source['ip_address']) ?></td>
-                                    <td>
-                                        <span class="tag vendor-tag vendor-<?= strtolower(htmlspecialchars($source['vendor'])) ?>">
-                                            <?= htmlspecialchars($source['vendor']) ?>
-                                        </span>
-                                    </td>
-                                    <td><?= htmlspecialchars($source['first_seen']) ?></td>
-                                    <td><?= htmlspecialchars($source['last_seen']) ?></td>
-                                    <td>
-                                        <?php if (!empty($source['hostid'])): ?>
-                                            <a href="zabbix.php?action=host.edit&hostid=<?= (int)$source['hostid'] ?>" class="zabbix-link">
-                                                <span class="status-indicator online"></span>
-                                                <?= htmlspecialchars($source['zabbix_host_name']) ?>
-                                            </a>
-                                        <?php else: ?>
-                                            <span class="status-indicator offline"></span>
-                                            <span class="no-mapping"><?= _('Unmapped') ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ((int)$source['enabled'] === 1): ?>
-                                            <span class="status-indicator online"><?= _('Active') ?></span>
-                                        <?php else: ?>
-                                            <span class="status-indicator offline"><?= _('Disabled') ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <a href="zabbix.php?action=logmanager.view&tab=livelogs&device_id=<?= (int)$source['source_id'] ?>" class="btn-alt btn-action-small">
-                                            <?= _('Live') ?>
-                                        </a>
-                                        <a href="zabbix.php?action=logmanager.view&tab=search&hostname=<?= urlencode($source['hostname']) ?>&source_ip=<?= urlencode($source['ip_address']) ?>" class="btn-alt btn-action-small">
-                                            <?= _('Search') ?>
-                                        </a>
-                                        <?php if ((int)$source['enabled'] === 1): ?>
-                                            <a href="zabbix.php?action=logmanager.view&tab=devices&task=toggle_source&source_id=<?= (int)$source['source_id'] ?>&status=0" class="btn-alt btn-action-small btn-disable-action">
-                                                <?= _('Disable') ?>
-                                            </a>
-                                        <?php else: ?>
-                                            <a href="zabbix.php?action=logmanager.view&tab=devices&task=toggle_source&source_id=<?= (int)$source['source_id'] ?>&status=1" class="btn-alt btn-action-small btn-enable-action">
-                                                <?= _('Enable') ?>
-                                            </a>
-                                        <?php endif; ?>
-                                        <a href="zabbix.php?action=logmanager.view&tab=devices&task=delete_source&source_id=<?= (int)$source['source_id'] ?>" 
-                                           class="btn-alt btn-action-small btn-delete-action" 
-                                           onclick="return confirm('<?= _('Are you sure you want to delete this log source and all its logs?') ?>');">
-                                            <?= _('Delete') ?>
-                                        </a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-    <?php elseif ($data['tab'] === 'alerts'): ?>
-        <div class="logmanager-grid logmanager-two-columns">
-            <div class="widget-panel">
-                <div class="widget-header flex-header">
-                    <h2><?= _('Regex Alert Rules') ?></h2>
-                    <button type="button" class="btn-primary" onclick="showRuleForm()"><?= _('New Rule') ?></button>
-                </div>
-                
-                <div id="rule-form-container" class="rule-form-panel" style="display: none;">
-                    <h3 id="form-title"><?= _('Create Alert Rule') ?></h3>
-                    <form action="zabbix.php?action=logmanager.view&tab=alerts" method="post" class="alert-rule-form">
-                        <input type="hidden" name="task" value="save_rule">
-                        <input type="hidden" id="rule_id" name="rule_id" value="">
-                        
-                        <div class="form-group">
-                            <label for="name"><?= _('Rule Name') ?></label>
-                            <input type="text" id="name" name="name" required placeholder="e.g. BGP Session Down">
-                        </div>
-                        <div class="form-group">
-                            <label for="regex_pattern"><?= _('Regex Pattern') ?></label>
-                            <input type="text" id="regex_pattern" name="regex_pattern" required placeholder="e.g. BGP.*neighbor.*lost">
-                        </div>
-                        <div class="form-group">
-                            <label for="severity"><?= _('Alert Severity') ?></label>
-                            <select id="severity" name="severity">
-                                <?php foreach ($severity_names as $val => $name): ?>
-                                    <?php if ($val !== ''): ?>
-                                        <option value="<?= $val ?>"><?= htmlspecialchars($name) ?></option>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group inline-group">
-                            <label for="enabled"><?= _('Enabled') ?></label>
-                            <input type="checkbox" id="enabled" name="enabled" value="1" checked>
-                        </div>
-                        
-                        <div class="form-buttons">
-                            <button type="submit" class="btn-primary"><?= _('Save') ?></button>
-                            <button type="button" class="btn-alt" onclick="hideRuleForm()"><?= _('Cancel') ?></button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="widget-body no-padding" style="margin-top: 10px;">
-                    <table class="list-table">
-                        <thead>
-                            <tr>
-                                <th><?= _('Rule Name') ?></th>
-                                <th><?= _('Regex Pattern') ?></th>
-                                <th><?= _('Severity') ?></th>
-                                <th><?= _('Status') ?></th>
-                                <th><?= _('Actions') ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($data['rules'])): ?>
-                                <tr>
-                                    <td colspan="5" class="text-center no-data"><?= _('No alert rules defined.') ?></td>
-                                </tr>
+            <!-- Rules list -->
+            <table class="lm-table">
+                <thead><tr>
+                    <th>Name</th><th>Pattern</th><th>Severity</th><th>Status</th><th>Actions</th>
+                </tr></thead>
+                <tbody>
+                <?php if (empty($data['rules'])): ?>
+                    <tr class="no-data"><td colspan="5">No alert rules defined.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($data['rules'] as $r): ?>
+                    <tr>
+                        <td><strong><?= $h($r['name']) ?></strong></td>
+                        <td><code style="font-size:11px"><?= $h($r['regex_pattern']) ?></code></td>
+                        <td><span class="lm-tag sev-<?= (int)$r['severity'] ?>"><?= $h($sevLabel[$r['severity']] ?? '') ?></span></td>
+                        <td>
+                            <?php if ((int)$r['enabled']): ?>
+                                <span style="color:var(--lm-ok);font-size:12px;font-weight:600">● On</span>
                             <?php else: ?>
-                                <?php foreach ($data['rules'] as $rule): ?>
-                                    <tr>
-                                        <td><strong><?= htmlspecialchars($rule['name']) ?></strong></td>
-                                        <td><code><?= htmlspecialchars($rule['regex_pattern']) ?></code></td>
-                                        <td>
-                                            <span class="tag <?= $severity_classes[$rule['severity']] ?>">
-                                                <?= htmlspecialchars($severity_names[$rule['severity']]) ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <?php if ((int)$rule['enabled'] === 1): ?>
-                                                <span class="status-indicator online"><?= _('Enabled') ?></span>
-                                            <?php else: ?>
-                                                <span class="status-indicator offline"><?= _('Disabled') ?></span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <button class="btn-alt btn-action-small" onclick="editRule(<?= htmlspecialchars(json_encode($rule)) ?>)"><?= _('Edit') ?></button>
-                                            <a href="zabbix.php?action=logmanager.view&tab=alerts&task=delete_rule&rule_id=<?= (int)$rule['rule_id'] ?>" 
-                                               class="btn-alt btn-action-small btn-delete-action" 
-                                               onclick="return confirm('<?= _('Delete this rule?') ?>');"><?= _('Delete') ?></a>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                <span style="color:var(--lm-danger);font-size:12px;font-weight:600">● Off</span>
+                            <?php endif ?>
+                        </td>
+                        <td style="display:flex;gap:4px">
+                            <button class="lm-btn lm-btn-ghost lm-btn-sm" onclick='editRule(<?= json_encode($r) ?>)'>Edit</button>
+                            <a href="<?= $url(['tab'=>'alerts','task'=>'delete_rule','rule_id'=>(int)$r['rule_id']]) ?>" class="lm-btn lm-btn-danger lm-btn-sm" onclick="return confirm('Delete this rule?')">Delete</a>
+                        </td>
+                    </tr>
+                    <?php endforeach ?>
+                <?php endif ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Alert Match History') ?></h2>
+    <!-- Alert History -->
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>📜 Alert History</h2></div>
+        <div class="lm-panel-body no-pad">
+            <table class="lm-table">
+                <thead><tr>
+                    <th>Rule</th><th>Severity</th><th>Matched Log</th><th>Time</th>
+                </tr></thead>
+                <tbody>
+                <?php if (empty($data['history'])): ?>
+                    <tr class="no-data"><td colspan="4">No alert matches recorded yet.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($data['history'] as $a): ?>
+                    <tr>
+                        <td><strong><?= $h($a['rule_name']) ?></strong></td>
+                        <td><span class="lm-tag sev-<?= (int)$a['rule_severity'] ?>"><?= $h($sevLabel[$a['rule_severity']] ?? '') ?></span></td>
+                        <td>
+                            <div class="lm-ah-host">[<?= $h($a['hostname']) ?> / <?= $h($a['source_ip']) ?>]</div>
+                            <div class="lm-ah-msg"><?= $h(mb_strimwidth($a['message'], 0, 120, '…')) ?></div>
+                        </td>
+                        <td style="font-size:11px;color:var(--lm-muted);white-space:nowrap"><?= $h($a['matched_at']) ?></td>
+                    </tr>
+                    <?php endforeach ?>
+                <?php endif ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function editRule(r){
+    document.getElementById('rule-form').style.display = 'block';
+    document.getElementById('form-title').textContent   = 'Edit Alert Rule';
+    document.getElementById('fld-rule_id').value  = r.rule_id;
+    document.getElementById('fld-name').value     = r.name;
+    document.getElementById('fld-regex').value    = r.regex_pattern;
+    document.getElementById('fld-severity').value = r.severity;
+    document.getElementById('fld-enabled').checked = parseInt(r.enabled) === 1;
+}
+</script>
+
+<?php /* ═══════════════════════════════════ STATISTICS ═══════════════════════════════════ */ ?>
+<?php elseif ($tab === 'statistics'): ?>
+
+<?php
+$sevColors = array_values($sevColor);
+$sevLabels = array_values($sevLabel);
+$sevCounts = array_values($data['severity_stats'] ?? array_fill(0,8,0));
+
+$devLabels = array_column($data['top_devices'], 'hostname');
+$devCounts = array_column($data['top_devices'], 'cnt');
+
+$dailyLabels = array_keys($data['daily_trend']);
+$dailyCounts = array_values($data['daily_trend']);
+$hourlyLabels = array_keys($data['hourly_trend']);
+$hourlyCounts = array_values($data['hourly_trend']);
+?>
+
+<div class="lm-grid2">
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>📊 Logs by Severity</h2></div>
+        <div class="lm-panel-body"><div class="lm-chart-box"><canvas id="ch-sev"></canvas></div></div>
+    </div>
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>🖥️ Logs by Device</h2></div>
+        <div class="lm-panel-body"><div class="lm-chart-box"><canvas id="ch-dev"></canvas></div></div>
+    </div>
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>⏱ Hourly Trend (Last 24 h)</h2></div>
+        <div class="lm-panel-body"><div class="lm-chart-box"><canvas id="ch-hour"></canvas></div></div>
+    </div>
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>📅 Daily Trend (Last 7 Days)</h2></div>
+        <div class="lm-panel-body"><div class="lm-chart-box"><canvas id="ch-day"></canvas></div></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+const cf = { responsive:true, maintainAspectRatio:false };
+const tick = { color:'#94a3b8' };
+const gridC = 'rgba(255,255,255,.06)';
+
+new Chart(document.getElementById('ch-sev'),{
+    type:'doughnut',
+    data:{ labels:<?=json_encode($sevLabels)?>, datasets:[{ data:<?=json_encode($sevCounts)?>, backgroundColor:<?=json_encode($sevColors)?>, borderWidth:0 }] },
+    options:{ ...cf, plugins:{ legend:{ position:'right', labels:{ color:'#94a3b8', boxWidth:12 } } } }
+});
+
+new Chart(document.getElementById('ch-dev'),{
+    type:'bar',
+    data:{ labels:<?=json_encode($devLabels)?>, datasets:[{ label:'Logs', data:<?=json_encode($devCounts)?>, backgroundColor:'#3b82f6', borderRadius:4 }] },
+    options:{ ...cf, plugins:{legend:{display:false}}, scales:{ x:{ticks:tick,grid:{color:gridC}}, y:{ticks:tick,grid:{color:gridC}} } }
+});
+
+new Chart(document.getElementById('ch-hour'),{
+    type:'line',
+    data:{ labels:<?=json_encode($hourlyLabels)?>, datasets:[{ label:'Logs/hr', data:<?=json_encode($hourlyCounts)?>, borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,.1)', fill:true, tension:.35, pointRadius:2 }] },
+    options:{ ...cf, plugins:{legend:{display:false}}, scales:{ x:{ticks:tick,grid:{color:gridC}}, y:{ticks:tick,grid:{color:gridC}} } }
+});
+
+new Chart(document.getElementById('ch-day'),{
+    type:'line',
+    data:{ labels:<?=json_encode($dailyLabels)?>, datasets:[{ label:'Logs/day', data:<?=json_encode($dailyCounts)?>, borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.1)', fill:true, tension:.35, pointRadius:3 }] },
+    options:{ ...cf, plugins:{legend:{display:false}}, scales:{ x:{ticks:tick,grid:{color:gridC}}, y:{ticks:tick,grid:{color:gridC}} } }
+});
+})();
+</script>
+
+<?php /* ═══════════════════════════════════ SETTINGS ═══════════════════════════════════ */ ?>
+<?php elseif ($tab === 'settings'): ?>
+
+<div class="lm-grid2">
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>⚙️ Log Retention Policy</h2></div>
+        <div class="lm-panel-body">
+            <form action="<?= $url(['tab'=>'settings','task'=>'save_settings']) ?>" method="post">
+                <div class="lm-fg">
+                    <label>Retention Period</label>
+                    <select name="retention_days">
+                        <?php foreach ($retentionOptions as $days=>$label): ?>
+                        <option value="<?= $days ?>" <?= (int)$data['retention_days'] === $days ? 'selected' : '' ?>>
+                            <?= $label ?>
+                        </option>
+                        <?php endforeach ?>
+                    </select>
+                    <span class="lm-help">Logs older than this period are removed by the cleanup script.</span>
                 </div>
-                <div class="widget-body no-padding">
-                    <table class="list-table">
-                        <thead>
-                            <tr>
-                                <th><?= _('Rule') ?></th>
-                                <th><?= _('Matched Log') ?></th>
-                                <th><?= _('Time') ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($data['history'])): ?>
-                                <tr>
-                                    <td colspan="3" class="text-center no-data"><?= _('No alert match history found.') ?></td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($data['history'] as $hist): ?>
-                                    <tr>
-                                        <td><strong><?= htmlspecialchars($hist['rule_name']) ?></strong></td>
-                                        <td>
-                                            <div class="alert-log-details">
-                                                <span class="alert-log-host">[<?= htmlspecialchars($hist['hostname']) ?>]</span>
-                                                <span class="alert-log-message"><?= htmlspecialchars($hist['message']) ?></span>
-                                            </div>
-                                        </td>
-                                        <td><?= htmlspecialchars($hist['matched_at']) ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                <div class="lm-form-actions" style="margin-top:16px">
+                    <button type="submit" class="lm-btn lm-btn-primary">💾 Save Policy</button>
                 </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="lm-panel">
+        <div class="lm-panel-head"><h2>📋 Syslog Daemon Info</h2></div>
+        <div class="lm-panel-body">
+            <table class="lm-info-table">
+                <tr><td>UDP Port</td><td><code>514</code></td></tr>
+                <tr><td>TCP Port</td><td><code>514</code></td></tr>
+                <tr><td>Receiver</td><td><code>scripts/syslog_receiver.py</code></td></tr>
+                <tr><td>Cleanup</td><td><code>scripts/log_cleanup.py</code></td></tr>
+                <tr><td>Retention</td><td><strong><?= (int)$data['retention_days'] ?> days</strong></td></tr>
+            </table>
+            <div class="lm-note">
+                <strong>💡 Tip:</strong> Run the receiver as a systemd service or Docker container.<br>
+                Schedule cleanup via cron: <code>0 0 * * * python3 /path/to/log_cleanup.py</code>
             </div>
         </div>
-        <script>
-        function showRuleForm() {
-            document.getElementById('rule-form-container').style.display = 'block';
-            document.getElementById('form-title').innerText = '<?= _("Create Alert Rule") ?>';
-            document.getElementById('rule_id').value = '';
-            document.getElementById('name').value = '';
-            document.getElementById('regex_pattern').value = '';
-            document.getElementById('severity').value = '3';
-            document.getElementById('enabled').checked = true;
-        }
-        function hideRuleForm() {
-            document.getElementById('rule-form-container').style.display = 'none';
-        }
-        function editRule(rule) {
-            document.getElementById('rule-form-container').style.display = 'block';
-            document.getElementById('form-title').innerText = '<?= _("Edit Alert Rule") ?>';
-            document.getElementById('rule_id').value = rule.rule_id;
-            document.getElementById('name').value = rule.name;
-            document.getElementById('regex_pattern').value = rule.regex_pattern;
-            document.getElementById('severity').value = rule.severity;
-            document.getElementById('enabled').checked = (parseInt(rule.enabled) === 1);
-        }
-        </script>
+    </div>
+</div>
 
-    <?php elseif ($data['tab'] === 'statistics'): ?>
-        <?php
-        // Prepare statistics variables for Chart.js
-        $sev_labels = [];
-        $sev_counts = [];
-        $sev_colors = ['#d13b3b','#e94b4b','#f24f2f','#ff7800','#ffb300','#2baf2b','#00a3ff','#9e9e9e'];
-        $sev_bg = [];
-        foreach ($data['severity_stats'] as $sev => $cnt) {
-            $sev_labels[] = isset($severity_names[$sev]) ? str_replace('0 - ', '', str_replace('1 - ', '', str_replace('2 - ', '', str_replace('3 - ', '', str_replace('4 - ', '', str_replace('5 - ', '', str_replace('6 - ', '', str_replace('7 - ', '', $severity_names[$sev])))))))) : "Severity $sev";
-            $sev_counts[] = $cnt;
-            $sev_bg[] = isset($sev_colors[$sev]) ? $sev_colors[$sev] : '#555';
-        }
-        $dev_labels = [];
-        $dev_counts = [];
-        foreach ($data['top_devices'] as $device) {
-            $dev_labels[] = $device['hostname'];
-            $dev_counts[] = $device['cnt'];
-        }
-        $daily_labels = array_keys($data['daily_trend']);
-        $daily_counts = array_values($data['daily_trend']);
-        $hourly_labels = array_keys($data['hourly_trend']);
-        $hourly_counts = array_values($data['hourly_trend']);
-        ?>
-        <div class="logmanager-grid logmanager-two-columns">
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Logs by Severity') ?></h2>
-                </div>
-                <div class="widget-body chart-container">
-                    <canvas id="chart-severity"></canvas>
-                </div>
-            </div>
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Logs by Device') ?></h2>
-                </div>
-                <div class="widget-body chart-container">
-                    <canvas id="chart-devices"></canvas>
-                </div>
-            </div>
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Logs by Hour (Last 24 Hours)') ?></h2>
-                </div>
-                <div class="widget-body chart-container">
-                    <canvas id="chart-hourly"></canvas>
-                </div>
-            </div>
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Logs by Day (Last 7 Days)') ?></h2>
-                </div>
-                <div class="widget-body chart-container">
-                    <canvas id="chart-daily"></canvas>
-                </div>
-            </div>
-        </div>
-        <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            new Chart(document.getElementById('chart-severity'), {
-                type: 'doughnut',
-                data: {
-                    labels: <?= json_encode($sev_labels) ?>,
-                    datasets: [{
-                        data: <?= json_encode($sev_counts) ?>,
-                        backgroundColor: <?= json_encode($sev_bg) ?>,
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { color: '#ccc' } }
-                    }
-                }
-            });
-
-            new Chart(document.getElementById('chart-devices'), {
-                type: 'bar',
-                data: {
-                    labels: <?= json_encode($dev_labels) ?>,
-                    datasets: [{
-                        label: 'Log Count',
-                        data:  <?= json_encode($dev_counts) ?>,
-                        backgroundColor: '#00a3ff',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: { color: '#ccc' } },
-                        y: { ticks: { color: '#ccc' } }
-                    }
-                }
-            });
-
-            new Chart(document.getElementById('chart-hourly'), {
-                type: 'line',
-                data: {
-                    labels: <?= json_encode($hourly_labels) ?>,
-                    datasets: [{
-                        label: 'Log Count',
-                        data: <?= json_encode($hourly_counts) ?>,
-                        borderColor: '#2baf2b',
-                        backgroundColor: 'rgba(43, 175, 43, 0.1)',
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: { color: '#ccc' } },
-                        y: { ticks: { color: '#ccc' } }
-                    }
-                }
-            });
-
-            new Chart(document.getElementById('chart-daily'), {
-                type: 'line',
-                data: {
-                    labels: <?= json_encode($daily_labels) ?>,
-                    datasets: [{
-                        label: 'Log Count',
-                        data: <?= json_encode($daily_counts) ?>,
-                        borderColor: '#ff7800',
-                        backgroundColor: 'rgba(255, 120, 0, 0.1)',
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: { color: '#ccc' } },
-                        y: { ticks: { color: '#ccc' } }
-                    }
-                }
-            });
-        });
-        </script>
-
-    <?php elseif ($data['tab'] === 'settings'): ?>
-        <div class="logmanager-grid logmanager-two-columns">
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Log Retention Policy') ?></h2>
-                </div>
-                <div class="widget-body">
-                    <form action="zabbix.php?action=logmanager.view&tab=settings" method="post" class="settings-form">
-                        <input type="hidden" name="task" value="save_settings">
-
-                        <div class="form-group">
-                            <label for="retention_days"><?= _('Keep Logs For') ?></label>
-                            <select id="retention_days" name="retention_days" class="form-control-large">
-                                <?php foreach ($retention_options as $days => $label): ?>
-                                    <option value="<?= $days ?>" <?= (int)$data['retention_days'] === $days ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($label) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <small class="form-help"><?= _('Logs older than the selected period will be automatically deleted by the cleanup script.') ?></small>
-                        </div>
-
-                        <div class="form-buttons" style="margin-top: 20px;">
-                            <button type="submit" class="btn-primary"><?= _('Save Policy') ?></button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <div class="widget-panel">
-                <div class="widget-header">
-                    <h2><?= _('Syslog Receiver Daemon Info') ?></h2>
-                </div>
-                <div class="widget-body receiver-info-panel">
-                    <table class="receiver-table">
-                        <tr>
-                            <th><?= _('Service Status') ?></th>
-                            <td><span class="status-indicator online"></span> Active / Listening</td>
-                        </tr>
-                        <tr>
-                            <th><?= _('UDP Port') ?></th>
-                            <td><code>514</code></td>
-                        </tr>
-                        <tr>
-                            <th><?= _('TCP Port') ?></th>
-                            <td><code>514</code></td>
-                        </tr>
-                        <tr>
-                            <th><?= _('Receiver Script') ?></th>
-                            <td><code>modules/zabbix-log-manager/scripts/syslog_receiver.py</code></td>
-                        </tr>
-                        <tr>
-                            <th><?= _('Cleanup Task') ?></th>
-                            <td><code>modules/zabbix-log-manager/scripts/log_cleanup.py</code></td>
-                        </tr>
-                    </table>
-                    <div class="note-box" style="margin-top: 15px;">
-                        <strong>Note:</strong> Make sure the Python daemon is running in the background as a systemd service or inside your Docker container. Use the cleanup script in a cron job for automatic execution.
-                    </div>
-                </div>
-            </div>
-        </div>
-    <?php endif; ?>
+<?php endif ?>
 </div>
